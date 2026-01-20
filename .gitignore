@@ -20,3 +20,8 @@ Nueva carpeta/
 # OS
 .DS_Store
 Thumbs.db
+
+# Security: Local Scripts & Credentials
+*.bat
+*.env
+.env.*
