@@ -22,8 +22,7 @@ CORS(app)
 
 # En Vercel solo se puede escribir en /tmp
 UPLOAD_FOLDER = '/tmp/web_uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 HISTORY_FILE = os.path.join(UPLOAD_FOLDER, "history.json")
