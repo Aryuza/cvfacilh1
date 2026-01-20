@@ -192,12 +192,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData
             });
 
-            const data = await response.json();
+            // Leer como texto primero por si no es JSON (ej. error 504 de Vercel)
+            const responseText = await response.text();
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (jsonErr) {
+                console.error("No se pudo parsear JSON:", responseText);
+                throw new Error(`Error del servidor (${response.status}): ${responseText.substring(0, 150)}...`);
+            }
 
             if (response.ok) {
                 successSound.play().catch(e => console.log('Bloqueo de audio por navegador:', e));
                 successMsg.textContent = `¡Felicidades! Se procesó el CV de ${data.candidate}.`;
-
+                // ... rest of success logic as before ...
                 let statusText = "Email: Enviado ✅";
                 let statusColor = "#10b981";
 
@@ -215,12 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 emailStatus.textContent = statusText;
                 emailStatus.style.background = statusColor;
                 results.hidden = false;
-
                 loadHistory(); // Refresh history
-
                 window.scrollTo({ top: results.offsetTop - 50, behavior: 'smooth' });
-
-                // Clear inputs
                 clearInputs();
 
             } else {
@@ -228,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error(err);
-            alert('Error de conexión con el servidor.');
+            alert('Error: ' + err.message);
         } finally {
             processBtn.disabled = false;
             btnText.textContent = 'Generar y Enviar CV';

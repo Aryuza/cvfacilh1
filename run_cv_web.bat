@@ -2,7 +2,7 @@
 setlocal
 
 :: Configuración (Pega aquí tus credenciales)
-set GEMINI_API_KEY=AIzaSyBwZvOcfEYf7lCEsrktVeyvZGiE7IYkl9g
+set GEMINI_API_KEY=AIzaSyBwZvOcfEYf7lCEsrktVeyvZGiE7IYkl9g, AIzaSyAJ9HOpRoGTfa7dSQJfSruZwH0mGCnxzUs, AIzaSyC4knPnuy3kW3hMyEsKQWW0ROHW7CV5XcI
 set GMAIL_USER=curriculumfacilentregas@gmail.com
 set GMAIL_APP_PASSWORD=hidv hwqe euln oubd
 

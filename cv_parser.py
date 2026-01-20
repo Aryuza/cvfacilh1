@@ -60,12 +60,18 @@ import mimetypes
 import time
 
 def get_api_keys() -> List[str]:
-    """Returns a list of API keys from the environment variable."""
+    """Returns a list of API keys from the environment variable. Supports comma, newline or space as separator."""
     keys_str = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS")
     if not keys_str:
         return []
-    # Split by comma and clean whitespace
-    return [k.strip() for k in keys_str.split(",") if k.strip()]
+    
+    # Intenta separar por comas, si no hay muchas comas, intenta por espacios/newlines
+    if "," in keys_str:
+        raw_keys = keys_str.split(",")
+    else:
+        raw_keys = keys_str.split()
+        
+    return [k.strip() for k in raw_keys if k.strip()]
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extracts all text from a PDF file locally using pypdf."""
@@ -104,11 +110,17 @@ def _parse_with_specific_key(key: str, file_paths: list[str]) -> Dict[str, Any]:
             if pdf_text:
                 content_parts.append(f"\n--- Archivo (PDF): {os.path.basename(path)} ---\n{pdf_text}")
             else:
+                try:
+                    uploaded_file = upload_to_gemini(path, mime_type=mime_type)
+                    content_parts.append(uploaded_file)
+                except Exception as e:
+                    print(f"Error uploading PDF {path}: {e}")
+        else:
+            try:
                 uploaded_file = upload_to_gemini(path, mime_type=mime_type)
                 content_parts.append(uploaded_file)
-        else:
-            uploaded_file = upload_to_gemini(path, mime_type=mime_type)
-            content_parts.append(uploaded_file)
+            except Exception as e:
+                print(f"Error uploading file {path}: {e}")
 
     response = model.generate_content(
         contents=content_parts,
