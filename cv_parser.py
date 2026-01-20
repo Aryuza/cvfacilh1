@@ -59,6 +59,14 @@ REGLAS CRÍTICAS DE INTELIGENCIA Y FORMATO:
 import mimetypes
 import time
 
+def get_api_keys() -> List[str]:
+    """Returns a list of API keys from the environment variable."""
+    keys_str = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEYS")
+    if not keys_str:
+        return []
+    # Split by comma and clean whitespace
+    return [k.strip() for k in keys_str.split(",") if k.strip()]
+
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extracts all text from a PDF file locally using pypdf."""
     text = ""
@@ -73,63 +81,74 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 def upload_to_gemini(path: str, mime_type: str = None):
     """Uploads the given file to Gemini."""
     file = genai.upload_file(path, mime_type=mime_type)
-    # print(f"Uploaded file '{file.display_name}' as: {file.uri}")
     return file
 
-def parse_cv_multimodal(file_paths: list[str]) -> Dict[str, Any]:
-    """
-    Sends multiple files (text, images, PDFs) to Gemini and returns structured JSON data.
-    """
-    if not API_KEY:
-         raise ValueError("GEMINI_API_KEY environment variable not found.")
-
-    model = genai.GenerativeModel('gemini-flash-latest') 
+def _parse_with_specific_key(key: str, file_paths: list[str]) -> Dict[str, Any]:
+    """Helper that performs the actual parsing with a single configured key."""
+    genai.configure(api_key=key)
+    model = genai.GenerativeModel('gemini-flash-latest')
     
     content_parts = [SYSTEM_PROMPT, "\n\nINFORMACIÓN DEL USUARIO (Analiza todos los archivos adjuntos):"]
     
-    # Process each file
     for path in file_paths:
         mime_type, _ = mimetypes.guess_type(path)
         
-        # Determine if it's a file we should upload or read as text
-        # Text files are better read directly to save upload overhead/complexity for simple text
         if mime_type and mime_type.startswith('text'):
             try:
                 with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                    text_content = f.read()
-                    content_parts.append(f"\n--- Archivo (Texto): {os.path.basename(path)} ---\n{text_content}")
-            except Exception as e:
-                print(f"Error reading text file {path}: {e}")
+                    content_parts.append(f"\n--- Archivo (Texto): {os.path.basename(path)} ---\n{f.read()}")
+            except Exception as ex:
+                print(f"Error reading text file {path}: {ex}")
         elif mime_type == 'application/pdf':
-            # Local extraction for PDF to avoid upload timeouts
-            print(f"Extracting text from PDF locally: {os.path.basename(path)}...")
             pdf_text = extract_text_from_pdf(path)
             if pdf_text:
                 content_parts.append(f"\n--- Archivo (PDF): {os.path.basename(path)} ---\n{pdf_text}")
             else:
-                # Fallback to upload if extraction fails
-                try:
-                    print(f"Fallback: Uploading to Gemini: {os.path.basename(path)}...")
-                    uploaded_file = upload_to_gemini(path, mime_type=mime_type)
-                    content_parts.append(uploaded_file)
-                except Exception as e:
-                    print(f"Error uploading file {path}: {e}")
-        else:
-            # Upload binary files (Images)
-            try:
-                print(f"Uploading to Gemini: {os.path.basename(path)}...")
                 uploaded_file = upload_to_gemini(path, mime_type=mime_type)
                 content_parts.append(uploaded_file)
-            except Exception as e:
-                print(f"Error uploading file {path}: {e}")
+        else:
+            uploaded_file = upload_to_gemini(path, mime_type=mime_type)
+            content_parts.append(uploaded_file)
 
-    try:
-        response = model.generate_content(
-            contents=content_parts,
-            generation_config={"response_mime_type": "application/json"}
-        )
-        return json.loads(response.text)
-        
-    except Exception as e:
-        print(f"Error parsing CV data with Gemini: {e}")
-        raise e
+    response = model.generate_content(
+        contents=content_parts,
+        generation_config={"response_mime_type": "application/json"}
+    )
+    return json.loads(response.text)
+
+def parse_cv_multimodal(file_paths: list[str]) -> Dict[str, Any]:
+    """
+    Sends multiple files to Gemini. Supports API Key rotation if multiple keys are provided.
+    """
+    keys = get_api_keys()
+    if not keys:
+        raise ValueError("No se encontró GEMINI_API_KEY en las variables de entorno.")
+
+    last_err = None
+    for i, key in enumerate(keys):
+        try:
+            if len(keys) > 1:
+                print(f"Tentativa {i+1}/{len(keys)} con API Key que empieza en {key[:6]}...")
+            
+            return _parse_with_specific_key(key, file_paths)
+            
+        except Exception as e:
+            last_err = e
+            err_msg = str(e).lower()
+            print(f"Error con API Key {i+1}: {e}")
+            
+            # If there are more keys, and the error seems like a quota or auth issue, try next
+            if i < len(keys) - 1:
+                if "429" in err_msg or "quota" in err_msg or "401" in err_msg or "expired" in err_msg:
+                    print("Rotando a la siguiente API Key por error de cuota o validación...")
+                    time.sleep(1)
+                    continue
+                else:
+                    # For other errors (like prompt issues), don't bother rotating necessarily? 
+                    # Actually, better rotate anyway if something went wrong.
+                    print("Intentando con la siguiente clave por error genérico...")
+                    continue
+            else:
+                print("Se agotaron todas las API Keys disponibles.")
+                
+    raise last_err
