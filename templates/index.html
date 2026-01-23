@@ -77,6 +77,62 @@
             </div>
         </section>
 
+        <!-- PREVIEW & EDITOR SECTION -->
+        <section id="preview-editor-section" class="preview-grid" hidden>
+            <!-- Left Panel: PDF Preview -->
+            <div class="glass-card preview-card">
+                <h3 class="section-label">Vista Previa</h3>
+                <div class="pdf-viewer-container">
+                    <iframe id="pdfPreview" src="" frameborder="0"></iframe>
+                </div>
+                <div class="preview-actions">
+                    <p id="previewFilename" class="filename-text"></p>
+                </div>
+            </div>
+
+            <!-- Right Panel: Editor -->
+            <div class="glass-card editor-card">
+                <h3 class="section-label">Corregir Datos</h3>
+                <div id="editorForm" class="editor-scroll">
+                    <div class="input-group-grid">
+                        <div class="field-item">
+                            <label>Nombre</label>
+                            <input type="text" id="edit-nombre">
+                        </div>
+                        <div class="field-item">
+                            <label>Email</label>
+                            <input type="email" id="edit-email">
+                        </div>
+                    </div>
+                    <div class="field-item">
+                        <label>Perfil Profesional</label>
+                        <textarea id="edit-perfil" class="small-text"></textarea>
+                    </div>
+                    
+                    <div class="editor-sections">
+                        <div class="section-header">
+                            <label>Experiencia</label>
+                            <button class="btn-icon-add" onclick="addExpField()">+</button>
+                        </div>
+                        <div id="exp-container"></div>
+
+                        <div class="section-header">
+                            <label>Educación</label>
+                            <button class="btn-icon-add" onclick="addEduField()">+</button>
+                        </div>
+                        <div id="edu-container"></div>
+                    </div>
+
+                    <div class="editor-footer">
+                        <button id="regenerateBtn" class="btn-primary">
+                            <span id="regBtnText">Actualizar y Reenviar</span>
+                            <div id="regLoader" class="loader hidden"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- HISTORY SECTION -->
         <section id="history-section" class="main-card glass-card history-container">
             <h2 class="section-label">Historial de Envíos</h2>

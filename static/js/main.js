@@ -205,16 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 successSound.play().catch(e => console.log('Bloqueo de audio por navegador:', e));
                 successMsg.textContent = `¡Felicidades! Se procesó el CV de ${data.candidate}.`;
-                // ... rest of success logic as before ...
+
                 let statusText = "Email: Enviado ✅";
                 let statusColor = "#10b981";
 
                 if (data.email_status === 'Missing Email') {
                     statusText = "Aviso: No se detectó email en el texto (revisá el CV)";
                     statusColor = "#f59e0b";
-                } else if (data.email_status === 'Missing Credentials') {
-                    statusText = "Error: Faltan llaves en el servidor (Vercel)";
-                    statusColor = "#ef4444";
                 } else if (data.email_status === 'Failed') {
                     statusText = "Error: Falló el envío del mail (SMTP)";
                     statusColor = "#ef4444";
@@ -223,8 +220,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 emailStatus.textContent = statusText;
                 emailStatus.style.background = statusColor;
                 results.hidden = false;
-                loadHistory(); // Refresh history
+                loadHistory();
+
+                // --- NEW PREVIEW & EDITOR LOGIC ---
+                currentSessionId = data.session_id;
+                populateEditor(data.cv_data);
+                showPreview(data.session_id, data.pdfs[0]); // Show normal PDF by default
+                document.getElementById('preview-editor-section').hidden = false;
+
                 window.scrollTo({ top: results.offsetTop - 50, behavior: 'smooth' });
+                // clearInputs(); // Don't clear yet so they can see what they uploaded if needed?
+                // Actually, let's just clear for a clean state in the generator part.
                 clearInputs();
 
             } else {
@@ -240,8 +246,131 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let currentSessionId = null;
+
+    function showPreview(sessionId, filename) {
+        const previewUrl = `/serve_pdf/${sessionId}/${filename}?t=${Date.now()}`;
+        document.getElementById('pdfPreview').src = previewUrl;
+        document.getElementById('previewFilename').textContent = filename;
+    }
+
+    function populateEditor(cv) {
+        document.getElementById('edit-nombre').value = cv.nombre || '';
+        document.getElementById('edit-email').value = cv.email || '';
+        document.getElementById('edit-perfil').value = cv.perfil || '';
+
+        const expContainer = document.getElementById('exp-container');
+        expContainer.innerHTML = '';
+        if (cv.experiencia) {
+            cv.experiencia.forEach(exp => addExpField(exp));
+        }
+
+        const eduContainer = document.getElementById('edu-container');
+        eduContainer.innerHTML = '';
+        if (cv.educacion) {
+            cv.educacion.forEach(edu => addEduField(edu));
+        }
+    }
+
+    window.addExpField = function (data = {}) {
+        const div = document.createElement('div');
+        div.className = 'exp-item';
+        div.innerHTML = `
+            <button class="btn-remove-item" onclick="this.parentElement.remove()">×</button>
+            <div class="field-item"><label>Empresa</label><input type="text" class="exp-empresa" value="${data.empresa || ''}"></div>
+            <div class="field-item"><label>Puesto</label><input type="text" class="exp-puesto" value="${data.puesto || ''}"></div>
+            <div class="field-item"><label>Fechas</label><input type="text" class="exp-fechas" value="${data.fechas || ''}"></div>
+            <div class="field-item"><label>Ubicación</label><input type="text" class="exp-ubicacion" value="${data.ubicacion || ''}"></div>
+            <div class="field-item"><label>Logros (sep. por punto)</label>
+            <textarea class="exp-logros small-text">${(data.logros || []).join('. ')}</textarea></div>
+        `;
+        document.getElementById('exp-container').appendChild(div);
+    };
+
+    window.addEduField = function (data = {}) {
+        const div = document.createElement('div');
+        div.className = 'edu-item';
+        div.innerHTML = `
+            <button class="btn-remove-item" onclick="this.parentElement.remove()">×</button>
+            <div class="field-item"><label>Institución</label><input type="text" class="edu-institucion" value="${data.institucion || ''}"></div>
+            <div class="field-item"><label>Título</label><input type="text" class="edu-titulo" value="${data.titulo || ''}"></div>
+            <div class="field-item"><label>Fechas</label><input type="text" class="edu-fechas" value="${data.fechas || ''}"></div>
+            <div class="field-item"><label>Ubicación</label><input type="text" class="edu-ubicacion" value="${data.ubicacion || ''}"></div>
+        `;
+        document.getElementById('edu-container').appendChild(div);
+    };
+
+    const regenerateBtn = document.getElementById('regenerateBtn');
+    regenerateBtn.addEventListener('click', async () => {
+        if (!currentSessionId) return;
+
+        const regBtnText = document.getElementById('regBtnText');
+        const regLoader = document.getElementById('regLoader');
+
+        regenerateBtn.disabled = true;
+        regBtnText.textContent = 'Actualizando...';
+        regLoader.classList.remove('hidden');
+
+        // Collect data from editor
+        const updatedData = {
+            nombre: document.getElementById('edit-nombre').value,
+            email: document.getElementById('edit-email').value,
+            perfil: document.getElementById('edit-perfil').value,
+            experiencia: [],
+            educacion: []
+        };
+
+        document.querySelectorAll('.exp-item').forEach(item => {
+            updatedData.experiencia.push({
+                empresa: item.querySelector('.exp-empresa').value,
+                puesto: item.querySelector('.exp-puesto').value,
+                fechas: item.querySelector('.exp-fechas').value,
+                ubicacion: item.querySelector('.exp-ubicacion').value,
+                logros: item.querySelector('.exp-logros').value.split('.').map(s => s.trim()).filter(s => s)
+            });
+        });
+
+        document.querySelectorAll('.edu-item').forEach(item => {
+            updatedData.educacion.push({
+                institucion: item.querySelector('.edu-institucion').value,
+                titulo: item.querySelector('.edu-titulo').value,
+                fechas: item.querySelector('.edu-fechas').value,
+                ubicacion: item.querySelector('.edu-ubicacion').value
+            });
+        });
+
+        try {
+            const response = await fetch('/regenerate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    cv_data: updatedData
+                })
+            });
+
+            const res = await response.json();
+            if (response.ok) {
+                // Update preview with normal PDF
+                showPreview(currentSessionId, res.pdfs[0]);
+                emailStatus.textContent = "¡Actualizado y Reenviado! ✅";
+                emailStatus.style.background = "#10b981";
+                loadHistory();
+                alert("CV actualizado y reenviado con éxito.");
+            } else {
+                alert('Error al regenerar: ' + res.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error al conectar con el servidor.');
+        } finally {
+            regenerateBtn.disabled = false;
+            regBtnText.textContent = 'Actualizar y Reenviar';
+            regLoader.classList.add('hidden');
+        }
+    });
+
     function clearInputs() {
-        // Generator
         pastedText.value = '';
         fileInput.value = '';
         photoInput.value = '';

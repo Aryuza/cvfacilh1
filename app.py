@@ -9,8 +9,9 @@ from cv_parser import parse_cv_multimodal, upload_to_gemini, extract_text_from_p
 import google.generativeai as genai
 import json
 import datetime
-from cv_dividers_only import generate_divider, generate_divider_smaller, generate_divider_larger, generate_divider_tiny, create_circular_image_with_border
+from cv_dividers_only import generate_divider, generate_divider_smaller, generate_divider_larger, generate_divider_tiny, create_circular_image_with_border, build_dividers_pdf
 from email_sender import send_cvs_email
+import glob
 
 # Función stub para mantener compatibilidad si se llama, pero ya no usamos python-docx por peso
 def extract_text_from_docx(path):
@@ -181,6 +182,7 @@ def process():
             "session_id": session_id,
             "candidate": candidate_name,
             "email_status": email_status,
+            "cv_data": cv_data,
             "pdfs": [os.path.basename(p) for p in generated_pdfs]
         })
 
@@ -194,6 +196,64 @@ def get_history():
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return jsonify(json.load(f))
     return jsonify([])
+
+@app.route('/serve_pdf/<session_id>/<filename>')
+def serve_pdf(session_id, filename):
+    folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id, "output_cvs")
+    return send_from_directory(folder, filename)
+
+@app.route('/regenerate', methods=['POST'])
+def regenerate():
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        cv_data = data.get('cv_data')
+        
+        if not session_id or not cv_data:
+            return jsonify({"error": "Missing data"}), 400
+            
+        session_path = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+        output_dir = os.path.join(session_path, "output_cvs")
+        
+        # Look for processed profile photo
+        processed_image = os.path.join(session_path, "processed_profile.png")
+        if not os.path.exists(processed_image):
+            processed_image = None
+            
+        # Regenerate all formats
+        p1 = generate_divider(cv_data, output_dir, processed_image)
+        p2 = generate_divider_smaller(cv_data, output_dir, processed_image)
+        p3 = generate_divider_larger(cv_data, output_dir, processed_image)
+        p4 = generate_divider_tiny(cv_data, output_dir, processed_image)
+        generated_pdfs = [p1, p2, p3, p4]
+        
+        # Resend email
+        gmail_user = os.environ.get("GMAIL_USER")
+        gmail_pass = os.environ.get("GMAIL_APP_PASSWORD")
+        candidate_email = cv_data.get("email")
+        candidate_name = cv_data.get("nombre", "Candidato")
+        
+        email_status = "Sent"
+        if not gmail_user or not gmail_pass:
+            email_status = "Missing Credentials"
+        elif not candidate_email:
+            email_status = "Missing Email"
+        else:
+            success = send_cvs_email(candidate_email, generated_pdfs, candidate_name, gmail_user, gmail_pass)
+            if not success:
+                email_status = "Failed"
+        
+        log_to_history(candidate_name, candidate_email or "N/A", email_status + " (Edit)")
+        
+        return jsonify({
+            "status": "success",
+            "candidate": candidate_name,
+            "email_status": email_status,
+            "pdfs": [os.path.basename(p) for p in generated_pdfs]
+        })
+    except Exception as e:
+        print(f"Regenerate error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
