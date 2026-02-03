@@ -232,6 +232,35 @@ textarea:focus {
     box-shadow: 0 0 10px var(--primary-glow);
 }
 
+.manual-email-group {
+    margin-top: 1.5rem;
+    animation: fadeIn 0.4s ease;
+}
+
+.glass-input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    color: white;
+    font-size: 0.95rem;
+    transition: all 0.3s;
+}
+
+.glass-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.input-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    font-style: italic;
+}
+
 .drop-zone {
     border: 2px dashed var(--card-border);
     border-radius: 12px;

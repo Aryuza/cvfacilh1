@@ -176,6 +176,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('text', text);
 
+        const manualEmail = document.getElementById('targetEmail').value.trim();
+        if (manualEmail) {
+            formData.append('target_email', manualEmail);
+        }
+
         if (profilePhotoBlob) {
             // Give it a generic name if it's from paste
             const filename = profilePhotoBlob.name || "pasted_image.png";
@@ -374,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pastedText.value = '';
         fileInput.value = '';
         photoInput.value = '';
+        document.getElementById('targetEmail').value = '';
         fileList.innerHTML = '';
         selectedFiles = [];
         profilePhotoBlob = null;

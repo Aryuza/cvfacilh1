@@ -127,6 +127,12 @@ def process():
         print(f"[{session_id}] Parsing CV data...")
         cv_data = parse_cv_multimodal(gemini_inputs)
         
+        # Override with manual email if provided
+        target_email = request.form.get('target_email')
+        if target_email:
+            print(f"[{session_id}] Using manual target email: {target_email}")
+            cv_data['email'] = target_email
+        
         # 4. Image Processing
         processed_image_out = None
         if profile_image_path:
